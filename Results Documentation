@@ -1,0 +1,104 @@
+# Results Documentation
+## P. falciparum PfAlba Family scRNA-seq Analysis
+
+**Analysis Date:** June 2026  
+**Dataset:** pf-ch10x-set4 (10x Chromium scRNA-seq)  
+**Strain analyzed:** NF54  
+**Pipeline:** Seurat 5.5.0 | R 4.6.0
+
+---
+
+## Dataset Summary
+
+| Parameter | Value |
+|-----------|-------|
+| Total NF54 cells | 35,529 |
+| Total genes | 5,274 |
+| Normalization | LogNormalize (scale = 10,000) |
+| Stage annotation source | STAGE_LR metadata column |
+
+### Cell Counts by Life Cycle Stage
+
+| Stage | Cell Count |
+|-------|-----------|
+| Trophozoite | 13,432 |
+| Schizont | 8,158 |
+| Gametocyte | 6,870 |
+| Ring | 7,069 |
+
+---
+
+## Raw Count Verification
+
+This is the ground truth — pulled directly from the count matrix before any normalization.
+
+| Gene | PlasmoDB ID | Total UMIs | Cells Expressing | % of Cells | Max UMI/Cell |
+|------|------------|-----------|-----------------|-----------|-------------|
+| PfAlba1 | PF3D7-0813600 | 15,055 | 9,442 | 26.6% | 16 |
+| PfAlba2 | PF3D7-1006800 | 28,279 | 15,234 | 42.9% | 21 |
+| PfAlba3 | PF3D7-1418300 | 510 | 484 | 1.4% | 3 |
+| PfAlba4 | PF3D7-0600200 | 138 | 52 | 0.15% | 38 |
+
+---
+
+## PfAlba4 Stage Distribution (52 expressing cells)
+
+| Stage | Cells Expressing |
+|-------|----------------|
+| Trophozoite | 23 |
+| Ring | 10 |
+| Schizont | 10 |
+| Gametocyte | 9 |
+
+**Interpretation:** Randomly distributed across stages. Not stage-enriched. Consistent with genuine low expression, not stage-specific biology.
+
+---
+
+## Output Files
+
+| File | Description | Dimensions |
+|------|-------------|-----------|
+| `plots/alba_vlnplot.pdf` | Violin plot — expression distribution per stage | 10" x 8" |
+| `plots/alba_dotplot_unscaled.pdf` | Dot plot — % expressing + avg expression | 8" x 5" |
+| `plots/alba_barplot.pdf` | Bar plot — all 4 Albas mean expression by stage | 10" x 6" |
+| `plots/alba_barplot_low.pdf` | Bar plot — Alba3 + Alba4 focused (rescaled y-axis) | 8" x 5" |
+
+---
+
+## Biological Interpretation
+
+### PfAlba1 — Core RBP, constitutively expressed
+High detection (26.6% cells, 15,055 total UMIs) across all stages with trophozoite peak. Consistent with known role as translational regulator throughout the intraerythrocytic cycle. Confirmed by both scRNA-seq and bulk TPM data.
+
+### PfAlba2 — Dominant RBP, highest expression of all four
+Highest detection of the family (42.9% cells, 28,279 UMIs). Peaks in ring and trophozoite stages. Known to interact with RUF6 ncRNA (an activator of var expression). Overexpression represses var genes (Acharya et al. 2025). Confirmed by both scRNA-seq and bulk TPM.
+
+### PfAlba3 — Near-absent in scRNA-seq; dropout confirmed
+Only 484 cells (1.4%) detect Alba3, with a maximum of 3 UMIs per cell. However, **bulk RNA-seq (TPM analysis) shows Alba3 peaks at 40–44 hpi (late trophozoite/early schizont)**. The discrepancy is explained by **scRNA-seq dropout**: each droplet captures only 5–15% of a cell's mRNA, so lowly-expressed transcripts get zero counts by chance. This is a known limitation of scRNA-seq technology.
+
+### PfAlba4 — Near-absent across all stages
+Only 52 cells (0.15%) express Alba4, randomly distributed across stages with no enrichment. Bulk TPM shows Alba4 is expressed at 40–48 hpi and in merozoites. Same dropout explanation applies. Overexpression is well-tolerated by the parasite and does not significantly perturb the transcriptome (Acharya et al. 2025), consistent with its role in the non-essential NMD pathway.
+
+---
+
+## Technical Notes
+
+### Why scRNA-seq and bulk RNA-seq disagree for Alba3/4
+scRNA-seq dropout is the primary explanation. For a gene with very few transcripts per cell, the probability that any given droplet captures at least one molecule of that mRNA is low. Bulk RNA-seq averages signal across millions of cells, accumulating enough signal even from rare transcripts to yield a reliable measurement. This is not a pipeline error — it is an inherent property of the technology.
+
+### Gene name format in this dataset
+This dataset uses **hyphens** in PlasmoDB IDs: `PF3D7-0813600`  
+Standard PlasmoDB format uses **underscores**: `PF3D7_0813600`  
+Using underscores will return "gene not found" in this dataset.
+
+### Why DotPlot uses scale = FALSE
+With only 4 stage groups, z-score scaling (the default in Seurat's DotPlot) compresses relative differences and generates a misleading color scale ranging from -1 to +1. Using `scale = FALSE` displays actual log-normalized expression values.
+
+---
+
+## Reference Paper
+
+Acharya D, Bavikatte AN, Ashok VV, Hegde SR, Macpherson CR, Scherf A, Vembar SS.  
+*Ectopic overexpression of Plasmodium falciparum DNA-/RNA-binding Alba proteins misregulates virulence gene homeostasis during asexual blood development.*  
+Microbiology Spectrum, March 2025.  
+DOI: [10.1128/spectrum.00885-24](https://doi.org/10.1128/spectrum.00885-24)
