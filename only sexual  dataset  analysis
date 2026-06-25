@@ -1,0 +1,96 @@
+# =============================================================================
+# FILE:    temporal_gametocyte_pipeline.R
+# PROJECT: P. falciparum Alba Family scRNA-seq Analysis
+# AUTHOR:  Prabhav
+# DATE:    June 2026
+#
+# PURPOSE:
+#   Runs the complete pipeline from raw data to final plots, explicitly 
+#   targeting the temporal differentiation of sexual stages (Gametocytes)
+#   by merging the 'DAY' and 'STAGE_HR' metadata columns.
+# =============================================================================
+
+# 1. LOAD LIBRARIES & SET PATHS
+library(Seurat)
+library(data.table)
+library(Matrix)
+library(ggplot2)
+
+message("=== Starting Temporal Gametocyte Pipeline ===")
+raw_counts_file <- "pf-ch10x-set4-ch10x-raw.csv"
+meta_file       <- "pf-ch10x-set4-ch10x-data.csv"
+plots_dir       <- "plots/"
+if (!dir.exists(plots_dir)) dir.create(plots_dir)
+
+# 2. READ RAW MATRIX & OPTIMIZE MEMORY
+message("Reading raw count matrix... (Do not interrupt)")
+raw_df <- fread(raw_counts_file)
+genes <- raw_df[[1]]
+raw_mat <- as.matrix(raw_df[, -1, with = FALSE])
+rownames(raw_mat) <- genes
+
+message("Converting to sparse matrix to save RAM...")
+sparse_mat <- Matrix(raw_mat, sparse = TRUE)
+rm(raw_df, raw_mat)
+gc()
+
+# 3. CREATE SEURAT OBJECT & ATTACH METADATA
+message("Creating Seurat object and loading metadata...")
+seurat_obj <- CreateSeuratObject(counts = sparse_mat, min.cells = 3, min.features = 200)
+meta_df <- read.csv(meta_file, row.names = 1)
+seurat_obj <- AddMetaData(object = seurat_obj, metadata = meta_df)
+
+# 4. SUBSET NF54 STRAIN
+message("Subsetting to NF54 strain...")
+nf54_obj <- subset(seurat_obj, subset = STRAIN == "NF54")
+rm(sparse_mat, meta_df, seurat_obj)
+gc()
+
+# 5. ISOLATE GAMETOCYTES & CREATE TEMPORAL STAGES
+message("Isolating gametocytes and building temporal metadata...")
+target_stages <- c("gametocyte (developing)", "gametocyte (female)", "gametocyte (male)")
+sexual_obj <- subset(nf54_obj, subset = STAGE_HR %in% target_stages)
+
+# Flush the full NF54 object to clear RAM
+rm(nf54_obj)
+gc()
+
+# Create the Hybrid Column (e.g., "Day 10a_gametocyte (female)")
+sexual_obj$TEMPORAL_STAGE <- paste(sexual_obj$DAY, sexual_obj$STAGE_HR, sep = "_")
+message("Cells per Temporal Stage:")
+print(table(sexual_obj$TEMPORAL_STAGE))
+
+# 6. NORMALIZE & DEFINE GENES
+message("Normalizing data...")
+sexual_obj <- NormalizeData(sexual_obj, normalization.method = "LogNormalize", scale.factor = 10000)
+
+alba_genes <- c("PF3D7-0814200", "PF3D7-1346300", "PF3D7-1006200", "PF3D7-1347500")
+valid_alba <- alba_genes[alba_genes %in% rownames(sexual_obj)]
+alba_labels <- c(
+  "PF3D7-0814200" = "PfAlba1", "PF3D7-1346300" = "PfAlba2",
+  "PF3D7-1006200" = "PfAlba3", "PF3D7-1347500" = "PfAlba4"
+)
+
+# 7. GENERATE FINAL PLOTS
+message("Generating Temporal Dot Plot...")
+dot_final <- DotPlot(
+  sexual_obj, features = valid_alba, group.by = "TEMPORAL_STAGE", scale = FALSE           
+) +
+  scale_x_discrete(labels = alba_labels) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  ggtitle("Alba Family Expression in Temporal Gametocytes")
+
+message("Generating Temporal Violin Plot...")
+vln_final <- VlnPlot(
+  sexual_obj, features = valid_alba, group.by = "TEMPORAL_STAGE", pt.size = 0, ncol = 2
+)
+for (i in seq_along(valid_alba)) {
+  vln_final[[i]] <- vln_final[[i]] + ggtitle(alba_labels[valid_alba[i]])
+}
+
+# 8. SAVE OUTPUTS
+ggsave(file.path(plots_dir, "alba_temporal_sexual_dotplot.pdf"), dot_final, width = 10, height = 6)
+ggsave(file.path(plots_dir, "alba_temporal_sexual_vlnplot.pdf"), vln_final, width = 12, height = 8)
+
+message("=== PIPELINE COMPLETE ===")
+message("Check the 'plots' folder for your final temporal maps.")
